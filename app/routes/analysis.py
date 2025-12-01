@@ -29,13 +29,14 @@ MVP_USER_ID = 1
 # 기존 엔드포인트들은 /api/v1/analysis/scan으로 통합됨
 
 
-async def analyze_with_ai(scanned_med: dict, user_medicines: List[dict]) -> dict:
+async def analyze_with_ai(scanned_med: dict, user_medicines: List[dict], medical_conditions: List[str] = None) -> dict:
     """
     OpenAI를 사용한 약물 상호작용 분석
     
     Args:
         scanned_med: 촬영한 약물 정보 (name, ingredient, amount)
         user_medicines: 사용자의 현재 복용 중인 약물 목록
+        medical_conditions: 사용자의 지병 목록
     
     Returns:
         dict: 분석 결과 (overallRiskScore, riskLevel, riskItems, warnings)
@@ -45,9 +46,14 @@ async def analyze_with_ai(scanned_med: dict, user_medicines: List[dict]) -> dict
         
         client = OpenAI(api_key=settings.openai_api_key)
         
+        # 지병 정보 추가
+        medical_conditions_text = ""
+        if medical_conditions:
+            medical_conditions_text = f"\n\n**중요: 사용자의 지병**\n사용자는 다음 질환을 앓고 있습니다: {', '.join(medical_conditions)}\n이 지병들을 고려하여 약물의 적합성과 위험성을 평가하세요."
+        
         # AI 분석을 위한 프롬프트
-        system_prompt = """당신은 약물 상호작용 분석 전문가입니다.
-촬영한 약물과 사용자가 현재 복용 중인 약물들을 비교하여 위험성을 분석하세요.
+        system_prompt = f"""당신은 약물 상호작용 분석 전문가입니다.
+촬영한 약물과 사용자가 현재 복용 중인 약물들을 비교하여 위험성을 분석하세요.{medical_conditions_text}
 
 다음 3가지 위험 유형을 확인하세요:
 1. duplicate: 성분 중복 (같은 성분이 여러 약에 포함)
@@ -55,29 +61,26 @@ async def analyze_with_ai(scanned_med: dict, user_medicines: List[dict]) -> dict
 3. timing: 복용 시간 충돌 (같은 시간에 복용하면 안 되는 약)
 
 분석 결과는 다음 JSON 형식으로 반환하세요:
-{
-  "overallRiskScore": 0-10 사이 정수 (0=안전, 10=매우 위험),
+{{"overallRiskScore": 0-10 사이 정수 (0=안전, 10=매우 위험),
   "riskLevel": "low" | "medium" | "high",
   "riskItems": [
-    {
-      "id": "고유ID (예: duplicate-1, interaction-1)",
+    {{"id": "고유ID (예: duplicate-1, interaction-1)",
       "type": "duplicate | interaction | timing",
       "severity": "low | medium | high",
       "title": "위험 항목 제목",
       "description": "상세 설명",
       "percentage": 0-100 사이 정수
-    }
+    }}
   ],
   "warnings": ["경고 메시지 배열"],
   "summary": "분석 결과 요약 (강조할 부분은 **텍스트** 형식으로)",
   "sections": [
-    {
-      "icon": "Ionicons 아이콘 이름 (time, alert-circle, swap-horizontal, flask, fitness, restaurant, water, moon 등)",
+    {{"icon": "Ionicons 아이콘 이름 (time, alert-circle, swap-horizontal, flask, fitness, restaurant, water, moon 등)",
       "title": "섹션 제목",
       "content": "섹션 본문 (강조: **텍스트**, 줄바꿈: \\n으로 구분, 목록 형식 권장)"
-    }
+    }}
   ]
-}
+}}
 
 **중요 규칙:**
 - sections 배열은 최소 1개 이상 (권장: 복용 방법, 주의사항, 대체 방안 등)
@@ -195,7 +198,12 @@ async def analyze_scanned_medication(
                 detail="약물 상세 정보를 찾을 수 없습니다."
             )
         
-        # 3. 사용자의 현재 복용 약물 조회
+        # 3. 사용자 정보 및 지병 조회
+        from app.models.user import User
+        user = db.query(User).filter(User.id == request.user_id).first()
+        user_medical_conditions = user.medical_conditions if user and user.medical_conditions else []
+        
+        # 4. 사용자의 현재 복용 약물 조회
         user_medicines = db.query(Medicine).filter(
             Medicine.user_id == request.user_id
         ).all()
@@ -228,8 +236,8 @@ async def analyze_scanned_medication(
             "amount": scanned_medicine_data.get("dl_name", "").split()[-1] if scanned_medicine_data.get("dl_name") else "정보 없음"
         }
         
-        # 5. AI 분석 수행
-        ai_result = await analyze_with_ai(scanned_med, user_med_with_schedule)
+        # 5. AI 분석 수행 (지병 정보 포함)
+        ai_result = await analyze_with_ai(scanned_med, user_med_with_schedule, user_medical_conditions)
         
         # 6. 응답 구성
         return MedicationAnalysisResponse(

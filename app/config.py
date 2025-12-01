@@ -17,11 +17,6 @@ class Settings(BaseSettings):
     db_user: str = "postgres"
     db_password: str
     
-    # Security
-    secret_key: str
-    algorithm: str = "HS256"
-    access_token_expire_minutes: int = 30
-    
     # OpenAI
     openai_api_key: str = ""
     

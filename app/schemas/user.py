@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 
 
 # User Schemas
@@ -9,6 +9,7 @@ class UserBase(BaseModel):
     username: str
     full_name: Optional[str] = None
     phone: Optional[str] = None
+    medical_conditions: Optional[List[str]] = []
 
 
 class UserCreate(UserBase):
@@ -21,6 +22,7 @@ class UserUpdate(BaseModel):
     full_name: Optional[str] = None
     phone: Optional[str] = None
     password: Optional[str] = None
+    medical_conditions: Optional[List[str]] = None
 
 
 class UserResponse(UserBase):

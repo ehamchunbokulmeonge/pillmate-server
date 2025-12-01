@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import get_settings
 from app.database import engine, Base
-from app.routes import medicines, schedules, ocr, analysis, chat
+from app.routes import medicines, schedules, ocr, analysis, chat, users
 
 settings = get_settings()
 
@@ -49,6 +49,7 @@ async def health_check():
     return {"status": "healthy"}
 
 # Include routers (No Authentication Required)
+app.include_router(users.router, prefix=f"{settings.api_v1_prefix}/users", tags=["사용자"])
 app.include_router(medicines.router, prefix=f"{settings.api_v1_prefix}/medicines", tags=["약"])
 app.include_router(schedules.router, prefix=f"{settings.api_v1_prefix}/schedules", tags=["스케쥴"])
 app.include_router(ocr.router, prefix=f"{settings.api_v1_prefix}/ocr", tags=["OCR"])
