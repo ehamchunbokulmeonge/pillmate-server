@@ -47,6 +47,10 @@ ENV/
 uploads/
 temp/
 
+# Credentials (Google Cloud 등)
+credentials/
+*.json
+
 # Logs
 *.log
 logs/

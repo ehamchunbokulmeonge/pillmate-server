@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     
     # OCR
     tesseract_cmd: str = "/usr/local/bin/tesseract"
+    google_application_credentials: str = ""
     
     # CORS
     allowed_origins: str = "http://localhost:3000,http://localhost:5173"

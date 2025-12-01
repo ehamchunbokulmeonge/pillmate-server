@@ -75,24 +75,22 @@ class AIHubDataLoader:
         
         return results
     
-    def search_by_print(self, front: str = "", back: str = "") -> List[Dict]:
-        """각인으로 검색"""
+    def search_by_print(self, query: str = "", limit: int = 10) -> List[Dict]:
+        """각인으로 검색 (앞면 또는 뒷면에 query가 포함된 약)"""
         if not self.loaded:
             return []
         
         results = []
+        query_upper = query.upper()
         
         for med in self.medicine_data:
-            match = True
+            print_front = (med.get("print_front") or "").upper()
+            print_back = (med.get("print_back") or "").upper()
             
-            if front and med.get("print_front", "").upper() != front.upper():
-                match = False
-            
-            if back and med.get("print_back", "").upper() != back.upper():
-                match = False
-            
-            if match and (front or back):
+            if query_upper in print_front or query_upper in print_back:
                 results.append(med)
+                if len(results) >= limit:
+                    break
         
         return results
     

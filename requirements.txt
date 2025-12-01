@@ -23,6 +23,9 @@ pydantic-settings==2.7.1
 pytesseract==0.3.13
 Pillow==11.0.0
 opencv-python==4.10.0.84
+google-cloud-vision==3.11.0
+rapidfuzz==3.14.3
+python-Levenshtein==0.27.3
 
 # AI/ML
 openai==1.54.5
