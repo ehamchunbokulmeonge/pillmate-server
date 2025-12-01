@@ -18,15 +18,13 @@ MVP_USER_ID = 1
     summary="내 약 목록 조회"
 )
 async def get_medicines(
-    skip: int = 0,
-    limit: int = 100,
     db: Session = Depends(get_db)
 ):
     """내 약 목록 조회"""
     medicines = db.query(Medicine).filter(
         Medicine.user_id == MVP_USER_ID,
         Medicine.is_active == True
-    ).offset(skip).limit(limit).all()
+    ).all()
     return medicines
 
 

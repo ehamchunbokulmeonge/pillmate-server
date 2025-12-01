@@ -105,7 +105,7 @@ async def analyze_with_ai(scanned_med: dict, user_medicines: List[dict]) -> dict
         
         # OpenAI API 호출
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o",
             messages=messages,
             temperature=0.3,  # 낮은 온도로 일관된 분석
             max_tokens=1500,  # summary와 sections 추가로 토큰 증가
@@ -177,15 +177,15 @@ async def analyze_scanned_medication(
                 detail="매칭되는 약물을 찾을 수 없습니다."
             )
         
-        # 가장 높은 매칭 점수의 약물 선택
+        # 가장 높은 매칭 점수의 약물 선택 (MedicineMatch 객체)
         best_match = matched_medicines[0]
-        med_name = best_match["name"]
+        med_name = best_match.drug_name  # 객체 속성으로 접근
         
         # 2. AI Hub 데이터셋에서 약물 상세 정보 조회
         loader = get_aihub_loader()
         
         scanned_medicine_data = next(
-            (m for m in loader.medicine_data if m["약물명칭"] == med_name),
+            (m for m in loader.medicine_data if m.get("dl_name") == med_name),
             None
         )
         
@@ -214,9 +214,8 @@ async def analyze_scanned_medication(
                 "amount": med.amount or "정보 없음",
                 "schedules": [
                     {
-                        "time": s.specific_time.strftime("%H:%M") if s.specific_time else None,
-                        "time_of_day": s.time_of_day.value if s.time_of_day else None,
-                        "frequency_type": s.frequency_type.value if s.frequency_type else None
+                        "time": s.dose_time.strftime("%H:%M") if s.dose_time else None,
+                        "dose_count": s.dose_count
                     }
                     for s in schedules
                 ]
@@ -224,9 +223,9 @@ async def analyze_scanned_medication(
         
         # 4. 촬영한 약물 정보 구성
         scanned_med = {
-            "name": scanned_medicine_data.get("약물명칭", ""),
-            "ingredient": scanned_medicine_data.get("주성분명", "정보 없음"),
-            "amount": scanned_medicine_data.get("함량", "정보 없음")
+            "name": scanned_medicine_data.get("dl_name", ""),
+            "ingredient": scanned_medicine_data.get("dl_material", "정보 없음"),
+            "amount": scanned_medicine_data.get("dl_name", "").split()[-1] if scanned_medicine_data.get("dl_name") else "정보 없음"
         }
         
         # 5. AI 분석 수행

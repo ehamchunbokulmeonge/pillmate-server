@@ -70,7 +70,7 @@ async def get_ai_response(message: str, chat_history: List[dict] = None) -> tupl
         
         # OpenAI API 호출
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o",
             messages=messages,
             temperature=0.7,
             max_tokens=500,
@@ -167,8 +167,6 @@ async def chat(
 )
 async def get_chat_history(
     session_id: str = None,
-    skip: int = 0,
-    limit: int = 100,
     db: Session = Depends(get_db)
 ):
     """채팅 이력 조회 (MVP)"""
@@ -177,7 +175,7 @@ async def get_chat_history(
     if session_id:
         query = query.filter(ChatHistory.session_id == session_id)
     
-    history = query.order_by(ChatHistory.created_at).offset(skip).limit(limit).all()
+    history = query.order_by(ChatHistory.created_at).all()
     
     return history
 

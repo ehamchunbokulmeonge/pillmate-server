@@ -40,15 +40,13 @@ async def get_today_schedules(
     summary="전체 복용 스케줄 조회",
 )
 async def get_schedules(
-    skip: int = 0,
-    limit: int = 100,
     db: Session = Depends(get_db)
 ):
     """스케줄 목록 조회"""
     schedules = db.query(Schedule).filter(
         Schedule.user_id == MVP_USER_ID,
         Schedule.is_active == True
-    ).offset(skip).limit(limit).all()
+    ).all()
     
     return schedules
 
