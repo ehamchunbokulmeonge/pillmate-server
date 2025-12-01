@@ -54,8 +54,10 @@ pillmate/
 ├── .gitignore
 ├── alembic.ini              # Alembic 설정
 ├── requirements.txt         # Python 의존성
-├── setup.sh                 # 설치 스크립트
-├── run.sh                   # 실행 스크립트
+├── scripts/
+│   ├── setup.sh             # 설치 스크립트
+│   ├── run.sh               # 실행 스크립트
+│   └── test_api.sh          # API 테스트
 └── README.md
 ```
 

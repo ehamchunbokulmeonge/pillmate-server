@@ -60,7 +60,7 @@ GOOGLE_APPLICATION_CREDENTIALS=./credentials/google-vision-key.json
 
 ### 5.1 서버 재시작
 ```bash
-./run.sh
+./scripts/run.sh
 ```
 
 ### 5.2 OCR 테스트

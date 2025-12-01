@@ -24,7 +24,7 @@ cd pillmate-server
 
 ### 2단계: 자동 설치 스크립트 실행
 ```bash
-./setup.sh
+./scripts/setup.sh
 ```
 
 이 스크립트는 다음을 자동으로 수행합니다:
@@ -50,7 +50,7 @@ python init_data.py
 
 ### 5단계: 서버 실행
 ```bash
-./run.sh
+./scripts/run.sh
 # 또는
 uvicorn app.main:app --reload
 ```
