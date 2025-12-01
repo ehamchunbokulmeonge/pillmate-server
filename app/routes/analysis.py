@@ -63,12 +63,16 @@ def calculate_risk_level(duplicates: list, interactions: list) -> RiskLevel:
     return RiskLevel.SAFE
 
 
-@router.post("/detect-duplicate", response_model=AnalysisResponse)
+@router.post(
+    "/detect-duplicate",
+    response_model=AnalysisResponse,
+    summary="중복 성분 및 위험도 분석"
+)
 async def detect_duplicate(
     analysis_data: AnalysisRequest,
     db: Session = Depends(get_db)
 ):
-    """중복 성분 감지 및 위험도 분석 (MVP)"""
+    """중복 성분 감지 및 위험도 분석"""
     
     # 약 목록 조회
     medicines = db.query(Medicine).filter(

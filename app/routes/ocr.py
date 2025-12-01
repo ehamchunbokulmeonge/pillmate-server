@@ -15,14 +15,24 @@ settings = get_settings()
 MVP_USER_ID = 1
 
 
-@router.post("/recognize", response_model=OCRResponse)
+@router.post(
+    "/recognize",
+    response_model=OCRResponse,
+    summary="약 처방전 OCR 인식",
+    description="""
+    약 처방전이나 약 봉투 이미지에서 텍스트를 추출합니다.
+    
+    **기능:**
+    - 한글/영문 텍스트 인식
+    - Base64 인코딩 이미지 입력
+    - Tesseract OCR 엔진 사용
+    """
+)
 async def recognize_medicine(
     ocr_data: OCRRequest,
     db: Session = Depends(get_db)
 ):
-    """
-    약 이미지에서 텍스트 인식 (OCR) (MVP)
-    """
+    """약 이미지에서 텍스트 인식 (OCR)"""
     try:
         # Decode base64 image
         image_data = base64.b64decode(ocr_data.image_base64)
@@ -52,15 +62,16 @@ async def recognize_medicine(
         )
 
 
-@router.post("/search")
+@router.post(
+    "/search",
+    summary="약 이름으로 검색",
+    description="약 이름으로 의약품 정보를 검색합니다. (향후 공공데이터 API 연동 예정)"
+)
 async def search_medicine(
     query: str,
     db: Session = Depends(get_db)
 ):
-    """
-    약 이름으로 검색 (MVP)
-    TODO: 공공데이터 API 연동
-    """
+    """약 이름으로 검색"""
     # 실제로는 공공데이터포털의 의약품개요정보 API 등을 호출해야 함
     # 예시 응답
     return {

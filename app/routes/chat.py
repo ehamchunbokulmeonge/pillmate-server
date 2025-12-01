@@ -100,12 +100,16 @@ async def get_ai_response(message: str, chat_history: List[dict] = None) -> tupl
         return "죄송합니다. 일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", error_metadata
 
 
-@router.post("/", response_model=ChatResponse)
+@router.post(
+    "/",
+    response_model=ChatResponse,
+    summary="AI 약사 상담",
+)
 async def chat(
     chat_data: ChatRequest,
     db: Session = Depends(get_db)
 ):
-    """AI 약사 상담 (MVP)"""
+    """AI 약사 상담"""
     
     # 세션 ID 생성 (새로운 대화인 경우)
     session_id = chat_data.session_id or str(uuid.uuid4())
@@ -157,7 +161,10 @@ async def chat(
     )
 
 
-@router.get("/history", response_model=List[ChatHistoryResponse])
+@router.get("/history",
+            response_model=List[ChatHistoryResponse],
+            summary="채팅 이력 조회"
+)
 async def get_chat_history(
     session_id: str = None,
     skip: int = 0,
@@ -175,7 +182,10 @@ async def get_chat_history(
     return history
 
 
-@router.delete("/history/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/history/{session_id}",
+               status_code=status.HTTP_204_NO_CONTENT,
+               summary="채팅 이력 삭제"
+)
 async def delete_chat_session(
     session_id: str,
     db: Session = Depends(get_db)

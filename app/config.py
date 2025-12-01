@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     app_name: str = "PillMate"
     app_version: str = "1.0.0"
     debug: bool = True
-    api_v1_prefix: str = "/api"
+    api_v1_prefix: str = "/api/v1"
     
     # Database
     database_url: str

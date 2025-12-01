@@ -28,7 +28,11 @@ app.add_middleware(
 )
 
 # Health check endpoint
-@app.get("/")
+@app.get(
+    "/",
+    tags=["시스템"],
+    summary="API 상태",
+)
 async def root():
     return {
         "message": f"Welcome to {settings.app_name} API",
@@ -36,16 +40,20 @@ async def root():
         "status": "running"
     }
 
-@app.get("/health")
+@app.get(
+    "/health",
+    tags=["시스템"],
+    summary="서버 상태 체크",
+)
 async def health_check():
     return {"status": "healthy"}
 
 # Include routers (No Authentication Required)
-app.include_router(medicines.router, prefix=f"{settings.api_v1_prefix}/medicines", tags=["Medicines"])
-app.include_router(schedules.router, prefix=f"{settings.api_v1_prefix}/schedules", tags=["Schedules"])
+app.include_router(medicines.router, prefix=f"{settings.api_v1_prefix}/medicines", tags=["약"])
+app.include_router(schedules.router, prefix=f"{settings.api_v1_prefix}/schedules", tags=["스케쥴"])
 app.include_router(ocr.router, prefix=f"{settings.api_v1_prefix}/ocr", tags=["OCR"])
-app.include_router(analysis.router, prefix=f"{settings.api_v1_prefix}/analysis", tags=["Analysis"])
-app.include_router(chat.router, prefix=f"{settings.api_v1_prefix}/chat", tags=["AI Chat"])
+app.include_router(analysis.router, prefix=f"{settings.api_v1_prefix}/analysis", tags=["분석"])
+app.include_router(chat.router, prefix=f"{settings.api_v1_prefix}/chat", tags=["AI 채팅"])
 
 if __name__ == "__main__":
     import uvicorn

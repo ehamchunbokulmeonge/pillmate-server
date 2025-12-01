@@ -13,11 +13,15 @@ router = APIRouter()
 MVP_USER_ID = 1
 
 
-@router.get("/today", response_model=List[TodayScheduleResponse])
+@router.get(
+    "/today",
+    response_model=List[TodayScheduleResponse],
+    summary="오늘의 복용 스케줄",
+)
 async def get_today_schedules(
     db: Session = Depends(get_db)
 ):
-    """오늘 복용 스케줄 조회 (MVP)"""
+    """오늘 복용 스케줄 조회"""
     today = datetime.now().date()
     
     schedules = db.query(Schedule, Medicine).join(
@@ -40,13 +44,17 @@ async def get_today_schedules(
     return result
 
 
-@router.get("/", response_model=List[ScheduleResponse])
+@router.get(
+    "/",
+    response_model=List[ScheduleResponse],
+    summary="전체 복용 스케줄 조회",
+)
 async def get_schedules(
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db)
 ):
-    """스케줄 목록 조회 (MVP)"""
+    """스케줄 목록 조회"""
     schedules = db.query(Schedule).filter(
         Schedule.user_id == MVP_USER_ID,
         Schedule.is_active == True
@@ -55,12 +63,16 @@ async def get_schedules(
     return schedules
 
 
-@router.get("/{schedule_id}", response_model=ScheduleResponse)
+@router.get(
+    "/{schedule_id}",
+    response_model=ScheduleResponse,
+    summary="스케줄 상세 정보",
+)
 async def get_schedule(
     schedule_id: int,
     db: Session = Depends(get_db)
 ):
-    """스케줄 상세 조회 (MVP)"""
+    """스케줄 상세 조회"""
     schedule = db.query(Schedule).filter(
         Schedule.id == schedule_id,
         Schedule.user_id == MVP_USER_ID
@@ -75,12 +87,17 @@ async def get_schedule(
     return schedule
 
 
-@router.post("/", response_model=ScheduleResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/",
+    response_model=ScheduleResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="복용 스케줄 등록",
+)
 async def create_schedule(
     schedule_data: ScheduleCreate,
     db: Session = Depends(get_db)
 ):
-    """스케줄 등록 (MVP)"""
+    """스케줄 등록"""
     # Verify medicine exists and belongs to user
     medicine = db.query(Medicine).filter(
         Medicine.id == schedule_data.medicine_id,
@@ -105,7 +122,10 @@ async def create_schedule(
     return db_schedule
 
 
-@router.put("/{schedule_id}", response_model=ScheduleResponse)
+@router.put("/{schedule_id}",
+            response_model=ScheduleResponse,
+            summary="스케줄 수정"
+)
 async def update_schedule(
     schedule_id: int,
     schedule_data: ScheduleUpdate,
@@ -134,7 +154,10 @@ async def update_schedule(
     return schedule
 
 
-@router.post("/{schedule_id}/complete", response_model=ScheduleResponse)
+@router.post("/{schedule_id}/complete",
+             response_model=ScheduleResponse,
+             summary="복용 완료 처리"
+)
 async def complete_schedule(
     schedule_id: int,
     db: Session = Depends(get_db)
@@ -160,7 +183,10 @@ async def complete_schedule(
     return schedule
 
 
-@router.delete("/{schedule_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{schedule_id}",
+               status_code=status.HTTP_204_NO_CONTENT,
+               summary="스케줄 삭제"
+)
 async def delete_schedule(
     schedule_id: int,
     db: Session = Depends(get_db)
