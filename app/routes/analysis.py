@@ -18,6 +18,7 @@ from app.schemas.analysis import (
     CommentSection
 )
 from app.config import get_settings
+from app.services.rag_service import search_all_safety_info
 
 router = APIRouter()
 settings = get_settings()
@@ -31,7 +32,7 @@ MVP_USER_ID = 1
 
 async def analyze_with_ai(scanned_med: dict, user_medicines: List[dict], medical_conditions: List[str] = None) -> dict:
     """
-    OpenAI를 사용한 약물 상호작용 분석
+    OpenAI를 사용한 약물 상호작용 분석 (RAG 통합)
     
     Args:
         scanned_med: 촬영한 약물 정보 (name, ingredient, amount)
@@ -46,6 +47,46 @@ async def analyze_with_ai(scanned_med: dict, user_medicines: List[dict], medical
         
         client = OpenAI(api_key=settings.openai_api_key)
         
+        # RAG: 스캔한 약과 복용 중인 약들의 DUR 안전 정보 검색
+        all_drug_names = [scanned_med['ingredient']]
+        for med in user_medicines:
+            if 'ingredient' in med:
+                all_drug_names.append(med['ingredient'])
+        
+        try:
+            rag_safety_info = search_all_safety_info(all_drug_names)
+            
+            # RAG 컨텍스트 생성
+            rag_context = "\n\n**참고할 의약품 안전 정보 (DUR 데이터):**\n"
+            
+            # 병용금기
+            if rag_safety_info['contraindications']:
+                rag_context += "\n[병용금기 정보]\n"
+                for i, item in enumerate(rag_safety_info['contraindications'][:3], 1):
+                    rag_context += f"{i}. {item['drug_a']} + {item['drug_b']}: {item['detail']}\n"
+            
+            # 연령금기
+            if rag_safety_info['age_restrictions']:
+                rag_context += "\n[연령금기 정보]\n"
+                for i, item in enumerate(rag_safety_info['age_restrictions'][:2], 1):
+                    rag_context += f"{i}. {item['drug']}: {item['detail']}\n"
+            
+            # 임부금기
+            if rag_safety_info['pregnancy_restrictions']:
+                rag_context += "\n[임부금기 정보]\n"
+                for i, item in enumerate(rag_safety_info['pregnancy_restrictions'][:2], 1):
+                    rag_context += f"{i}. {item['drug']}: {item['detail']}\n"
+            
+            # 노인주의
+            if rag_safety_info['elderly_cautions']:
+                rag_context += "\n[노인주의 정보]\n"
+                for i, item in enumerate(rag_safety_info['elderly_cautions'][:2], 1):
+                    rag_context += f"{i}. {item['drug']}: {item['detail']}\n"
+        
+        except Exception as e:
+            print(f"RAG 검색 오류 (무시하고 계속): {e}")
+            rag_context = ""
+        
         # 지병 정보 추가
         medical_conditions_text = ""
         if medical_conditions:
@@ -54,6 +95,8 @@ async def analyze_with_ai(scanned_med: dict, user_medicines: List[dict], medical
         # AI 분석을 위한 프롬프트
         system_prompt = f"""당신은 약물 상호작용 분석 전문가입니다.
 촬영한 약물과 사용자가 현재 복용 중인 약물들을 비교하여 위험성을 분석하세요.{medical_conditions_text}
+
+**중요**: 위에 제공된 "참고할 의약품 안전 정보 (DUR 데이터)"를 우선적으로 참고하여 정확한 분석을 수행하세요.
 
 다음 3가지 위험 유형을 확인하세요:
 1. duplicate: 성분 중복 (같은 성분이 여러 약에 포함)
@@ -68,7 +111,7 @@ async def analyze_with_ai(scanned_med: dict, user_medicines: List[dict], medical
       "type": "duplicate | interaction | timing",
       "severity": "low | medium | high",
       "title": "위험 항목 제목",
-      "description": "상세 설명",
+      "description": "상세 설명 (DUR 데이터 기반)",
       "percentage": 0-100 사이 정수
     }}
   ],
@@ -88,6 +131,7 @@ async def analyze_with_ai(scanned_med: dict, user_medicines: List[dict], medical
 - 모든 텍스트는 한글로 제공
 - icon은 유효한 Ionicons 이름 사용 (time, alert-circle, swap-horizontal, flask, fitness, restaurant, water, moon)
 - content는 줄바꿈(\\n)과 목록 형식(• 또는 숫자)으로 작성
+- DUR 데이터를 참고하여 더 정확하고 전문적인 분석 제공
 
 반드시 위 JSON 형식만 출력하고, 다른 텍스트는 포함하지 마세요."""
 
@@ -98,6 +142,7 @@ async def analyze_with_ai(scanned_med: dict, user_medicines: List[dict], medical
 
 현재 복용 중인 약물:
 {json.dumps(user_medicines, ensure_ascii=False, indent=2)}
+{rag_context if rag_context else ""}
 
 위험성을 분석해주세요."""
 

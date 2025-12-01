@@ -7,6 +7,7 @@ from app.database import get_db
 from app.models.chat_history import ChatHistory, MessageRole
 from app.schemas.chat import ChatRequest, ChatResponse, ChatHistoryResponse
 from app.config import get_settings
+from app.services.rag_service import search_by_question
 
 router = APIRouter()
 settings = get_settings()
@@ -17,8 +18,8 @@ MVP_USER_ID = 1
 
 async def get_ai_response(message: str, chat_history: List[dict] = None) -> tuple[str, dict]:
     """
-    AI 약사 필메이트 응답 생성
-    OpenAI GPT-4 API 사용
+    AI 약사 필메이트 응답 생성 (RAG 통합)
+    OpenAI GPT-4o API + DUR 데이터 검색
     
     Returns:
         tuple: (response_text, metadata)
@@ -29,6 +30,20 @@ async def get_ai_response(message: str, chat_history: List[dict] = None) -> tupl
         from openai import OpenAI
         
         client = OpenAI(api_key=settings.openai_api_key)
+        
+        # RAG: 사용자 질문과 관련된 DUR 안전 정보 검색
+        try:
+            rag_results = search_by_question(message, k=3)
+            
+            # RAG 컨텍스트 생성
+            rag_context = ""
+            if rag_results:
+                rag_context = "\n\n**참고할 의약품 안전 정보 (DUR 데이터):**\n"
+                for i, result in enumerate(rag_results, 1):
+                    rag_context += f"\n{i}. {result['content']}\n"
+        except Exception as e:
+            print(f"RAG 검색 오류 (무시하고 계속): {e}")
+            rag_context = ""
         
         # 시스템 프롬프트: AI 약사 필메이트의 역할과 규칙
         system_prompt = """당신은 '필메이트'라는 이름의 AI 약사 챗봇입니다.
@@ -56,7 +71,9 @@ async def get_ai_response(message: str, chat_history: List[dict] = None) -> tupl
 
 9. 답변은 간결하면서도 충분한 정보를 담아 제공하세요.
 
-10. 단정적인 표현(반드시, 절대 등)은 피하고, 가능성이나 주의 중심으로 설명하세요."""
+10. 단정적인 표현(반드시, 절대 등)은 피하고, 가능성이나 주의 중심으로 설명하세요.
+
+**중요**: 위에 제공된 "참고할 의약품 안전 정보 (DUR 데이터)"가 있다면, 이를 우선적으로 참고하여 정확한 답변을 제공하세요."""
 
         # 메시지 구성
         messages = [{"role": "system", "content": system_prompt}]
@@ -65,8 +82,12 @@ async def get_ai_response(message: str, chat_history: List[dict] = None) -> tupl
         if chat_history:
             messages.extend(chat_history[-10:])  # 최근 10개만 사용
         
-        # 현재 사용자 메시지 추가
-        messages.append({"role": "user", "content": message})
+        # 현재 사용자 메시지 추가 (RAG 컨텍스트 포함)
+        user_message = message
+        if rag_context:
+            user_message = f"{message}\n{rag_context}"
+        
+        messages.append({"role": "user", "content": user_message})
         
         # OpenAI API 호출
         response = client.chat.completions.create(
