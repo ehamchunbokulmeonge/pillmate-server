@@ -63,6 +63,10 @@ Thumbs.db
 htmlcov/
 .tox/
 
+# AI Hub 데이터셋 (용량이 커서 Git에서 제외)
+data/
+*.json
+
 # Alembic migrations (자동 생성 파일만 제외)
 alembic/versions/*.py
 !alembic/versions/.gitkeep
