@@ -209,6 +209,7 @@ async def analyze_scanned_medication(
     try:
         # OCR로 텍스트 추출
         extracted_text = extract_text_from_image(request.image_base64)
+        print(f"[SCAN DEBUG] OCR 추출 텍스트: {extracted_text}")
         
         if not extracted_text or len(extracted_text.strip()) < 2:
             raise HTTPException(
@@ -218,11 +219,14 @@ async def analyze_scanned_medication(
         
         # AI Hub 데이터셋에서 약 검색
         matched_medicines = search_medicine_in_aihub_data(extracted_text)
+        print(f"[SCAN DEBUG] 매칭된 약물 개수: {len(matched_medicines) if matched_medicines else 0}")
+        if matched_medicines:
+            print(f"[SCAN DEBUG] 최고 매칭: {matched_medicines[0].drug_name} (신뢰도: {matched_medicines[0].confidence})")
         
         if not matched_medicines:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="매칭되는 약물을 찾을 수 없습니다."
+                detail=f"매칭되는 약물을 찾을 수 없습니다. OCR 텍스트: '{extracted_text}'"
             )
         
         # 가장 높은 매칭 점수의 약물 선택 (MedicineMatch 객체)

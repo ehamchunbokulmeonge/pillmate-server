@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     google_application_credentials: str = ""
     
     # CORS
-    allowed_origins: str = "http://localhost:3000,http://localhost:5173"
+    allowed_origins: str = "http://localhost:3000,http://localhost:5173,http://localhost:8082"
     
     # File Upload
     max_upload_size: int = 10485760  # 10MB
