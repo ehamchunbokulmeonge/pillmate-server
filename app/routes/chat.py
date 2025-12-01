@@ -5,6 +5,7 @@ import uuid
 from datetime import datetime
 from app.database import get_db
 from app.models.chat_history import ChatHistory, MessageRole
+from app.models.chat_session import ChatSession
 from app.schemas.chat import ChatRequest, ChatResponse, ChatHistoryResponse
 from app.config import get_settings
 from app.services.rag_service import search_by_question
@@ -139,6 +140,60 @@ async def get_ai_response(message: str, chat_history: List[dict] = None, user_me
         return "죄송합니다. 일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", error_metadata
 
 
+async def generate_chat_title(messages: List[dict], db: Session) -> str:
+    """
+    대화 내용을 바탕으로 제목 생성 (GPT-4o 사용)
+    
+    Args:
+        messages: 대화 메시지 리스트 (최근 3개 정도)
+        db: Database session
+    
+    Returns:
+        str: 생성된 제목 (최대 30자)
+    """
+    try:
+        from openai import OpenAI
+        
+        client = OpenAI(api_key=settings.openai_api_key)
+        
+        # 대화 내용 요약을 위한 프롬프트
+        conversation_text = "\n".join([
+            f"{msg['role']}: {msg['content']}"
+            for msg in messages[:3]  # 처음 3개 메시지만 사용
+        ])
+        
+        prompt = f"""다음 약물 상담 대화의 제목을 30자 이내로 지어주세요.
+        
+대화 내용:
+{conversation_text}
+
+제목 규칙:
+- 핵심 키워드만 간결하게
+- "타이레놀 복용법", "게보린 주의사항" 같은 형식
+- 존댓말 사용 안 함
+- 30자 이내
+- 이모티콘 사용 안 함
+
+제목:"""
+        
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            max_tokens=50
+        )
+        
+        title = response.choices[0].message.content.strip()
+        return title[:30]  # 최대 30자로 제한
+        
+    except Exception as e:
+        print(f"제목 생성 오류: {e}")
+        # 기본 제목 반환
+        return f"약물 상담 {datetime.now().strftime('%m/%d %H:%M')}"
+
+
 @router.post(
     "/",
     response_model=ChatResponse,
@@ -217,6 +272,25 @@ async def chat(
     db.commit()
     db.refresh(ai_message)
     
+    # 새 세션인 경우 제목 자동 생성
+    if not chat_data.session_id:
+        # ChatSession 생성
+        chat_session = ChatSession(
+            user_id=MVP_USER_ID,
+            session_id=session_id
+        )
+        db.add(chat_session)
+        db.commit()
+        
+        # 제목 생성 (비동기로 첫 대화 기반)
+        title = await generate_chat_title([
+            {"role": "user", "content": chat_data.message},
+            {"role": "assistant", "content": ai_response_text}
+        ], db)
+        
+        chat_session.title = title
+        db.commit()
+    
     return ChatResponse(
         message=ai_response_text,
         session_id=session_id,
@@ -262,3 +336,26 @@ async def delete_chat_session(
     db.commit()
     
     return None
+
+
+@router.get("/sessions",
+            summary="대화 세션 목록 조회"
+)
+async def get_chat_sessions(
+    db: Session = Depends(get_db)
+):
+    """사용자의 모든 대화 세션 목록 조회 (제목 포함)"""
+    sessions = db.query(ChatSession).filter(
+        ChatSession.user_id == MVP_USER_ID
+    ).order_by(ChatSession.updated_at.desc()).all()
+    
+    return [
+        {
+            "session_id": session.session_id,
+            "title": session.title,
+            "created_at": session.created_at,
+            "updated_at": session.updated_at
+        }
+        for session in sessions
+    ]
+
