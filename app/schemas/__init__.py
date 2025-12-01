@@ -11,8 +11,8 @@ from app.schemas.user import (
 from app.schemas.medicine import (
     MedicineBase,
     MedicineCreate,
-    MedicineUpdate,
     MedicineResponse,
+    MedicineDetailResponse,
 )
 from app.schemas.schedule import (
     ScheduleBase,

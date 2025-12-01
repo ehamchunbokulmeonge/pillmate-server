@@ -28,27 +28,20 @@ class Schedule(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     medicine_id = Column(Integer, ForeignKey("medicines.id"), nullable=False)
     
-    # 복용 시간
-    time_of_day = Column(SQLEnum(TimeOfDay), nullable=False)
-    specific_time = Column(Time)  # 특정 시간 (예: 08:00)
+    # 약 이름 (중복 저장 - 빠른 조회용)
+    medicine_name = Column(String(255), nullable=False)
     
-    # 복용 빈도
-    frequency_type = Column(SQLEnum(FrequencyType), default=FrequencyType.DAILY)
-    frequency_value = Column(Integer, default=1)  # 빈도 값 (예: 하루 3번이면 3)
+    # 약 개수 (1회 복용량)
+    dose_count = Column(Integer, nullable=False, default=1)  # 예: 2정
+    
+    # 복용 시간
+    dose_time = Column(Time, nullable=False)  # 복용 시간 (예: 08:00)
     
     # 복용 기간
     start_date = Column(DateTime, nullable=False)
-    end_date = Column(DateTime)
-    
-    # 알림 설정
-    notification_enabled = Column(Boolean, default=True)
-    
-    # 복용 완료 여부
-    is_completed = Column(Boolean, default=False)
-    completed_at = Column(DateTime)
+    end_date = Column(DateTime, nullable=False)
     
     # 메타 정보
-    notes = Column(String(500))
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -10,29 +10,13 @@ class Medicine(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     
-    # 약 기본 정보
-    name = Column(String(255), nullable=False)
-    product_code = Column(String(100))  # 품목기준코드
-    company = Column(String(255))  # 제조사
+    # 약 기본 정보 (스캔 보고서에서 가져옴)
+    name = Column(String(255), nullable=False)  # 약물명
+    ingredient = Column(String(255))  # 주성분명
+    amount = Column(String(100))  # 함량 (예: 500mg)
     
-    # 약 설명
-    description = Column(Text)
-    efficacy = Column(Text)  # 효능효과
-    dosage = Column(Text)  # 용법용량
-    
-    # 성분 정보
-    ingredients = Column(Text)  # JSON 형태로 저장
-    
-    # 경고 및 주의사항
-    warnings = Column(Text)
-    side_effects = Column(Text)
-    
-    # 이미지
-    image_url = Column(String(500))
-    
-    # 복용 정보
-    dosage_per_time = Column(Float)  # 1회 복용량
-    dosage_unit = Column(String(50))  # 단위 (정, ml, g 등)
+    # 스캔 분석 보고서 (JSON 형태로 저장)
+    scan_report = Column(Text)  # MedicationAnalysisResponse 전체 JSON
     
     # 메타 정보
     is_active = Column(Boolean, default=True)

@@ -22,26 +22,16 @@ async def get_today_schedules(
     db: Session = Depends(get_db)
 ):
     """오늘 복용 스케줄 조회"""
-    today = datetime.now().date()
+    today = datetime.now()
     
-    schedules = db.query(Schedule, Medicine).join(
-        Medicine, Schedule.medicine_id == Medicine.id
-    ).filter(
+    schedules = db.query(Schedule).filter(
         Schedule.user_id == MVP_USER_ID,
         Schedule.is_active == True,
-        Schedule.start_date <= datetime.now(),
-        (Schedule.end_date >= datetime.now()) | (Schedule.end_date == None)
+        Schedule.start_date <= today,
+        Schedule.end_date >= today
     ).all()
     
-    result = []
-    for schedule, medicine in schedules:
-        result.append(TodayScheduleResponse(
-            schedule=schedule,
-            medicine_name=medicine.name,
-            medicine_image_url=medicine.image_url
-        ))
-    
-    return result
+    return schedules
 
 
 @router.get(
@@ -92,6 +82,7 @@ async def get_schedule(
     response_model=ScheduleResponse,
     status_code=status.HTTP_201_CREATED,
     summary="복용 스케줄 등록",
+    description="약이름, 개수, 복용시간, 복용기간을 입력하여 스케줄을 등록합니다."
 )
 async def create_schedule(
     schedule_data: ScheduleCreate,
@@ -131,7 +122,7 @@ async def update_schedule(
     schedule_data: ScheduleUpdate,
     db: Session = Depends(get_db)
 ):
-    """스케줄 수정 (MVP)"""
+    """스케줄 수정"""
     schedule = db.query(Schedule).filter(
         Schedule.id == schedule_id,
         Schedule.user_id == MVP_USER_ID
@@ -154,35 +145,6 @@ async def update_schedule(
     return schedule
 
 
-@router.post("/{schedule_id}/complete",
-             response_model=ScheduleResponse,
-             summary="복용 완료 처리"
-)
-async def complete_schedule(
-    schedule_id: int,
-    db: Session = Depends(get_db)
-):
-    """복용 완료 처리 (MVP)"""
-    schedule = db.query(Schedule).filter(
-        Schedule.id == schedule_id,
-        Schedule.user_id == MVP_USER_ID
-    ).first()
-    
-    if not schedule:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Schedule not found"
-        )
-    
-    schedule.is_completed = True
-    schedule.completed_at = datetime.now()
-    
-    db.commit()
-    db.refresh(schedule)
-    
-    return schedule
-
-
 @router.delete("/{schedule_id}",
                status_code=status.HTTP_204_NO_CONTENT,
                summary="스케줄 삭제"
@@ -191,7 +153,7 @@ async def delete_schedule(
     schedule_id: int,
     db: Session = Depends(get_db)
 ):
-    """스케줄 삭제 (MVP)"""
+    """스케줄 삭제"""
     schedule = db.query(Schedule).filter(
         Schedule.id == schedule_id,
         Schedule.user_id == MVP_USER_ID

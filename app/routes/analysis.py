@@ -2,145 +2,275 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
 import json
+import base64
 from datetime import datetime
 from app.database import get_db
 from app.models.medicine import Medicine
 from app.models.analysis import AnalysisResult, RiskLevel
-from app.schemas.analysis import AnalysisRequest, AnalysisResponse
+from app.models.schedule import Schedule
+from app.schemas.analysis import (
+    AnalysisRequest, 
+    AnalysisResponse, 
+    ScanAnalysisRequest, 
+    MedicationAnalysisResponse,
+    ScannedMedication,
+    RiskItem,
+    CommentSection
+)
+from app.config import get_settings
 
 router = APIRouter()
+settings = get_settings()
 
 # MVP: 고정 사용자 ID (인증 없음)
 MVP_USER_ID = 1
 
 
-def analyze_duplicate_ingredients(medicines: List[Medicine]) -> dict:
-    """중복 성분 분석"""
-    ingredient_map = {}
+# 기존 엔드포인트들은 /api/v1/analysis/scan으로 통합됨
+
+
+async def analyze_with_ai(scanned_med: dict, user_medicines: List[dict]) -> dict:
+    """
+    OpenAI를 사용한 약물 상호작용 분석
     
-    for medicine in medicines:
-        if medicine.ingredients:
-            # ingredients가 JSON 문자열이라고 가정
-            try:
-                ingredients = json.loads(medicine.ingredients)
-                if isinstance(ingredients, list):
-                    for ingredient in ingredients:
-                        if ingredient not in ingredient_map:
-                            ingredient_map[ingredient] = []
-                        ingredient_map[ingredient].append(medicine.id)
-            except:
-                # JSON 파싱 실패 시 텍스트로 처리
-                if medicine.ingredients not in ingredient_map:
-                    ingredient_map[medicine.ingredients] = []
-                ingredient_map[medicine.ingredients].append(medicine.id)
+    Args:
+        scanned_med: 촬영한 약물 정보 (name, ingredient, amount)
+        user_medicines: 사용자의 현재 복용 중인 약물 목록
     
-    # 중복된 성분만 필터링
-    duplicates = [
-        {
-            "ingredient": ingredient,
-            "count": len(medicine_ids),
-            "medicine_ids": medicine_ids
+    Returns:
+        dict: 분석 결과 (overallRiskScore, riskLevel, riskItems, warnings)
+    """
+    try:
+        from openai import OpenAI
+        
+        client = OpenAI(api_key=settings.openai_api_key)
+        
+        # AI 분석을 위한 프롬프트
+        system_prompt = """당신은 약물 상호작용 분석 전문가입니다.
+촬영한 약물과 사용자가 현재 복용 중인 약물들을 비교하여 위험성을 분석하세요.
+
+다음 3가지 위험 유형을 확인하세요:
+1. duplicate: 성분 중복 (같은 성분이 여러 약에 포함)
+2. interaction: 약물 상호작용 (특정 약 조합 시 부작용 발생 가능)
+3. timing: 복용 시간 충돌 (같은 시간에 복용하면 안 되는 약)
+
+분석 결과는 다음 JSON 형식으로 반환하세요:
+{
+  "overallRiskScore": 0-10 사이 정수 (0=안전, 10=매우 위험),
+  "riskLevel": "low" | "medium" | "high",
+  "riskItems": [
+    {
+      "id": "고유ID (예: duplicate-1, interaction-1)",
+      "type": "duplicate | interaction | timing",
+      "severity": "low | medium | high",
+      "title": "위험 항목 제목",
+      "description": "상세 설명",
+      "percentage": 0-100 사이 정수
+    }
+  ],
+  "warnings": ["경고 메시지 배열"],
+  "summary": "분석 결과 요약 (강조할 부분은 **텍스트** 형식으로)",
+  "sections": [
+    {
+      "icon": "Ionicons 아이콘 이름 (time, alert-circle, swap-horizontal, flask, fitness, restaurant, water, moon 등)",
+      "title": "섹션 제목",
+      "content": "섹션 본문 (강조: **텍스트**, 줄바꿈: \\n으로 구분, 목록 형식 권장)"
+    }
+  ]
+}
+
+**중요 규칙:**
+- sections 배열은 최소 1개 이상 (권장: 복용 방법, 주의사항, 대체 방안 등)
+- summary와 sections[].content에서 강조할 부분은 **텍스트** 형식 사용
+- 모든 텍스트는 한글로 제공
+- icon은 유효한 Ionicons 이름 사용 (time, alert-circle, swap-horizontal, flask, fitness, restaurant, water, moon)
+- content는 줄바꿈(\\n)과 목록 형식(• 또는 숫자)으로 작성
+
+반드시 위 JSON 형식만 출력하고, 다른 텍스트는 포함하지 마세요."""
+
+        user_message = f"""촬영한 약물:
+- 이름: {scanned_med['name']}
+- 성분: {scanned_med['ingredient']}
+- 함량: {scanned_med['amount']}
+
+현재 복용 중인 약물:
+{json.dumps(user_medicines, ensure_ascii=False, indent=2)}
+
+위험성을 분석해주세요."""
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_message}
+        ]
+        
+        # OpenAI API 호출
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=messages,
+            temperature=0.3,  # 낮은 온도로 일관된 분석
+            max_tokens=1500,  # summary와 sections 추가로 토큰 증가
+            response_format={"type": "json_object"}  # JSON 모드
+        )
+        
+        # JSON 파싱
+        result = json.loads(response.choices[0].message.content)
+        return result
+        
+    except Exception as e:
+        print(f"AI Analysis Error: {e}")
+        # 오류 시 기본 안전 응답
+        return {
+            "overallRiskScore": 0,
+            "riskLevel": "low",
+            "riskItems": [],
+            "warnings": ["AI 분석 중 오류가 발생했습니다. 약사와 상담을 권장합니다."],
+            "summary": "분석을 완료할 수 없습니다. 약사와 상담하시기 바랍니다.",
+            "sections": [
+                {
+                    "icon": "alert-circle",
+                    "title": "안내",
+                    "content": "일시적인 오류로 정확한 분석이 어렵습니다.\n약사 또는 의사와 상담하시기 바랍니다."
+                }
+            ]
         }
-        for ingredient, medicine_ids in ingredient_map.items()
-        if len(medicine_ids) > 1
-    ]
-    
-    return duplicates
-
-
-def calculate_risk_level(duplicates: list, interactions: list) -> RiskLevel:
-    """위험도 계산"""
-    if not duplicates and not interactions:
-        return RiskLevel.SAFE
-    
-    if len(duplicates) >= 3 or len(interactions) >= 2:
-        return RiskLevel.HIGH
-    elif len(duplicates) >= 2 or len(interactions) >= 1:
-        return RiskLevel.MEDIUM
-    elif len(duplicates) >= 1:
-        return RiskLevel.LOW
-    
-    return RiskLevel.SAFE
 
 
 @router.post(
-    "/detect-duplicate",
-    response_model=AnalysisResponse,
-    summary="중복 성분 및 위험도 분석"
+    "/scan",
+    response_model=MedicationAnalysisResponse,
+    summary="약 사진 스캔 및 위험성 분석"
 )
-async def detect_duplicate(
-    analysis_data: AnalysisRequest,
+async def analyze_scanned_medication(
+    request: ScanAnalysisRequest,
     db: Session = Depends(get_db)
 ):
-    """중복 성분 감지 및 위험도 분석"""
+    """
+    약 사진을 OCR로 인식하고 사용자의 현재 복용 약과 비교 분석
     
-    # 약 목록 조회
-    medicines = db.query(Medicine).filter(
-        Medicine.id.in_(analysis_data.medicine_ids),
-        Medicine.user_id == MVP_USER_ID
-    ).all()
+    1. 이미지에서 OCR로 약물명 추출
+    2. 데이터베이스에서 약물 정보 매칭
+    3. 사용자의 현재 복용 중인 약물 조회
+    4. AI로 성분 중복, 약물 상호작용, 복용 시간 충돌 분석
+    5. 위험도 점수 및 경고 메시지 반환
+    """
     
-    if len(medicines) != len(analysis_data.medicine_ids):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Some medicines not found"
+    # 1. OCR 처리 - OCR 라우터의 함수 재사용
+    from app.routes.ocr import extract_text_from_image, search_medicine_in_aihub_data
+    from app.utils.aihub_loader import get_aihub_loader
+    
+    try:
+        # OCR로 텍스트 추출
+        extracted_text = extract_text_from_image(request.image_base64)
+        
+        if not extracted_text or len(extracted_text.strip()) < 2:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="약물 텍스트를 인식할 수 없습니다. 더 선명한 사진으로 다시 시도해주세요."
+            )
+        
+        # AI Hub 데이터셋에서 약 검색
+        matched_medicines = search_medicine_in_aihub_data(extracted_text)
+        
+        if not matched_medicines:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="매칭되는 약물을 찾을 수 없습니다."
+            )
+        
+        # 가장 높은 매칭 점수의 약물 선택
+        best_match = matched_medicines[0]
+        med_name = best_match["name"]
+        
+        # 2. AI Hub 데이터셋에서 약물 상세 정보 조회
+        loader = get_aihub_loader()
+        
+        scanned_medicine_data = next(
+            (m for m in loader.medicine_data if m["약물명칭"] == med_name),
+            None
         )
-    
-    # 중복 성분 분석
-    duplicates = analyze_duplicate_ingredients(medicines)
-    
-    # TODO: 실제 상호작용 분석 로직 추가 (외부 API 또는 DB)
-    interactions = []
-    
-    # 위험도 계산
-    risk_level = calculate_risk_level(duplicates, interactions)
-    
-    # 경고 및 권장사항 생성
-    warnings = []
-    recommendations = []
-    
-    if duplicates:
-        warnings.append("중복된 성분이 발견되었습니다. 과다 복용에 주의하세요.")
-        recommendations.append("의사 또는 약사와 상담하시기 바랍니다.")
-    
-    if risk_level in [RiskLevel.HIGH, RiskLevel.CRITICAL]:
-        warnings.append("높은 위험도가 감지되었습니다.")
-        recommendations.append("즉시 전문가와 상담하세요.")
-    
-    # 분석 결과 저장
-    analysis_result = AnalysisResult(
-        user_id=MVP_USER_ID,
-        medicine_ids=json.dumps(analysis_data.medicine_ids),
-        risk_level=risk_level,
-        duplicate_ingredients=json.dumps(duplicates),
-        interactions=json.dumps(interactions),
-        warnings=json.dumps(warnings),
-        recommendations=json.dumps(recommendations)
-    )
-    
-    db.add(analysis_result)
-    db.commit()
-    db.refresh(analysis_result)
-    
-    return AnalysisResponse(
-        risk_level=risk_level,
-        duplicate_ingredients=duplicates,
-        interactions=interactions,
-        warnings=warnings,
-        recommendations=recommendations,
-        created_at=datetime.now()
-    )
-
-
-@router.get("/history")
-async def get_analysis_history(
-    skip: int = 0,
-    limit: int = 100,
-    db: Session = Depends(get_db)
-):
-    """분석 이력 조회 (MVP)"""
-    results = db.query(AnalysisResult).filter(
-        AnalysisResult.user_id == MVP_USER_ID
-    ).order_by(AnalysisResult.created_at.desc()).offset(skip).limit(limit).all()
-    
-    return results
+        
+        if not scanned_medicine_data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="약물 상세 정보를 찾을 수 없습니다."
+            )
+        
+        # 3. 사용자의 현재 복용 약물 조회
+        user_medicines = db.query(Medicine).filter(
+            Medicine.user_id == request.user_id
+        ).all()
+        
+        # 약물 스케줄도 조회하여 복용 시간 정보 포함
+        user_med_with_schedule = []
+        for med in user_medicines:
+            schedules = db.query(Schedule).filter(
+                Schedule.medicine_id == med.id
+            ).all()
+            
+            user_med_with_schedule.append({
+                "id": med.id,
+                "name": med.name,
+                "ingredient": med.ingredient or "정보 없음",
+                "amount": med.amount or "정보 없음",
+                "schedules": [
+                    {
+                        "time": s.specific_time.strftime("%H:%M") if s.specific_time else None,
+                        "time_of_day": s.time_of_day.value if s.time_of_day else None,
+                        "frequency_type": s.frequency_type.value if s.frequency_type else None
+                    }
+                    for s in schedules
+                ]
+            })
+        
+        # 4. 촬영한 약물 정보 구성
+        scanned_med = {
+            "name": scanned_medicine_data.get("약물명칭", ""),
+            "ingredient": scanned_medicine_data.get("주성분명", "정보 없음"),
+            "amount": scanned_medicine_data.get("함량", "정보 없음")
+        }
+        
+        # 5. AI 분석 수행
+        ai_result = await analyze_with_ai(scanned_med, user_med_with_schedule)
+        
+        # 6. 응답 구성
+        return MedicationAnalysisResponse(
+            scannedMedication=ScannedMedication(
+                name=scanned_med["name"],
+                ingredient=scanned_med["ingredient"],
+                amount=scanned_med["amount"]
+            ),
+            overallRiskScore=ai_result.get("overallRiskScore", 0),
+            riskLevel=ai_result.get("riskLevel", "low"),
+            riskItems=[
+                RiskItem(
+                    id=item["id"],
+                    type=item["type"],
+                    severity=item["severity"],
+                    title=item["title"],
+                    description=item["description"],
+                    percentage=item["percentage"]
+                )
+                for item in ai_result.get("riskItems", [])
+            ],
+            warnings=ai_result.get("warnings", []),
+            summary=ai_result.get("summary", "분석이 완료되었습니다."),
+            sections=[
+                CommentSection(
+                    icon=section["icon"],
+                    title=section["title"],
+                    content=section["content"]
+                )
+                for section in ai_result.get("sections", [])
+            ]
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Scan Analysis Error: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"약물 분석 중 오류가 발생했습니다: {str(e)}"
+        )

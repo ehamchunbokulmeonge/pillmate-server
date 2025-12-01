@@ -224,81 +224,8 @@ def search_medicine_in_aihub_data(extracted_text: str) -> List[MedicineMatch]:
     return matches
 
 
-@router.post(
-    "/recognize",
-    response_model=OCRResponse,
-    summary="약 패키지 OCR 인식",
-    description="""
-    약 패키지 이미지에서 텍스트를 추출하고 AI Hub 데이터셋과 매칭합니다.
-    
-    **기능:**
-    - Google Cloud Vision API로 텍스트 추출
-    - AI Hub 의약품 이미지 데이터셋 매칭
-    - 약 이름, 제조사, 성분 정보 제공
-    - 각인 정보 (앞면/뒷면) 매칭
-    
-    **사용 방법:**
-    1. 약 패키지 사진 촬영
-    2. Base64로 인코딩하여 전송
-    3. 매칭된 약 정보 확인
-    """
-)
-async def recognize_medicine_package(
-    ocr_data: OCRRequest,
-    db: Session = Depends(get_db)
-):
-    """약 패키지 이미지 인식 및 매칭"""
-    try:
-        # 1. Google Cloud Vision API로 텍스트 추출
-        extracted_text = extract_text_from_image(ocr_data.image_base64)
-        
-        # 2. AI Hub 데이터셋에서 약 검색
-        matched_medicines = search_medicine_in_aihub_data(extracted_text)
-        
-        return OCRResponse(
-            extracted_text=extracted_text,
-            detected_medicines=matched_medicines,
-            success=True
-        )
-        
-    except Exception as e:
-        return OCRResponse(
-            extracted_text="",
-            detected_medicines=[],
-            success=False,
-            error_message=f"OCR 처리 실패: {str(e)}"
-        )
-
-
-@router.post(
-    "/search",
-    summary="약 이름으로 검색",
-    description="""
-    약 이름, 제조사, 각인 정보로 AI Hub 데이터셋에서 검색합니다.
-    
-    **검색 가능한 정보:**
-    - 약 이름 (한글/영문)
-    - 제조사명
-    - 앞면/뒷면 각인 문자
-    """
-)
-async def search_medicine_by_name(
-    query: str,
-    db: Session = Depends(get_db)
-):
-    """약 이름으로 AI Hub 데이터셋 검색"""
-    try:
-        # AI Hub 데이터셋에서 검색
-        results = search_medicine_in_aihub_data(query)
-        
-        return {
-            "query": query,
-            "count": len(results),
-            "results": [result.model_dump() for result in results]
-        }
-        
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"검색 실패: {str(e)}"
-        )
+# ============================================================
+# 주의: 아래 엔드포인트들은 /api/v1/analysis/scan으로 통합되었습니다.
+# 이 파일의 함수들(extract_text_from_image, search_medicine_in_aihub_data 등)은
+# analysis.py에서 내부적으로 사용됩니다.
+# ============================================================
